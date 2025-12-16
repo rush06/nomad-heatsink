@@ -5,10 +5,12 @@ ASTE-404 HW6 initial file
 #include <iostream>         // for screen output
 #include <fstream>          // for file writing
 #include <cmath>
+#include <vector>
 
 // function prototypes
 bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *g, double *T, int ni, int nj);
 double NomadContour(double x);
+double spline(double x);
 
 int main() {
 
@@ -201,16 +203,54 @@ bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *
 
 double NomadContour(double x){
     x = x / 0.0254; // convert to inches
-     
     double h = 0.0;
-    double num = 0.0;
 
     if (x < 5.94) {
-        h = 0.82 * 0.0254;
+        h = 0.82;
+        h = h * 0.0254;
     }
     else if (x < 6.56) {
-        num = 0.93 - (x - 5.94)^2
-        h = -0.14 + sqrt(0.93 - (x - 5.94)^2);
-
+        h = -0.14 + sqrt(0.93 - (x - 5.94)*(x - 5.94));
+        h = floor(h*100)/100;
+        h = h * 0.0254;
     }
+    else if (x < 7.00){
+        h = 0.6 - 0.84 * (x - 6.56);
+        h = floor(h*100)/100;
+        h = h * 0.0254;
+    }
+    else if (x < 7.62){
+        h = 0.9637 + sqrt(0.9637*0.9637 - (x-7.62)*(x-7.62));
+        h = floor(h*100)/100;
+        h = h * 0.0254;
+    }
+    else if (x < 7.71){
+        h = 0.245 + sqrt(0.245*0.245 - (x-7.62)*(x-7.62));
+        h = floor(h*100)/100;
+        h = h * 0.0254;
+    }
+    else if (x <= 9.6){
+        h = spline(x);
+        h = floor(h*100)/100;
+        h = h * 0.0254;
+    }
+}
+
+double spline(double x){
+    x = x - 7.71;
+    double h = 0.0;
+
+    // lookup table from engine spline
+    std::vector<double> xs = {0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 1.3, 1.4, 1.5, 1.6, 1.7, 1.8, 1.89};
+    std::vector<double> hs = {0, 0.061, 0.103, 0.145, 0.187, 0.228, 0.269, 0.309, 0.349, 0.387, 0.424, 0.459, 0.493, 0.525, 0.555, 0.583, 0.608, 0.630, 0.650, 0.664}; 
+
+    // interpolate between points
+    for (int i=1; i<xs.size(); i++){
+        if (x < xs[i]){
+            h = (hs[i] - hs[i-1])/(xs[i] - xs[i-1]) * (x - xs[i-1]) + hs[i-1];
+            break;
+        }
+    }
+
+    return h;
 }
