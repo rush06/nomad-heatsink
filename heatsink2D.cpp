@@ -47,8 +47,8 @@ int main() {
             }
 
             // Boundaries on top and bottom are gas
-            if (j = 0){solid[n] = 0;}
-            if (j = nj-1){solid[n] = 0;}
+            if (j == 0){solid[n] = 0;}
+            if (j == nj-1){solid[n] = 0;}
         }
     }
 
@@ -146,11 +146,11 @@ int main() {
             if (i==0){
                 // zero Neumann on x min
                 b[n] = 0;
-                d[n] = 2/(dxsqr);
+                d[n] = 2*k/(dxsqr);
             }
             else if (i==ni-1){
                 // zero Neumann on x max
-                b[n] = 2/(dxsqr);
+                b[n] = 2*k/(dxsqr);
                 d[n] = 0;
             }
         }
