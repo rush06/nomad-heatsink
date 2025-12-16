@@ -28,3 +28,6 @@ This project uses the Gauss-Seidel solver to determine a steady-state temperatur
 For the left and right boundaries, a zero neumann BC was applied as the goal of this simulation was to determine whether the selected heatsink thickness will survive. 
 
 For the upper and lower boundaries, a Robin BC for convective heat transfer was applied. This is a mixed BC that is more applicable to this scenario compared to the Neumann or Dirchlet assumptions. The upper boundary was assumed to be ambient gas at 30K, and the lower boundary was assumed to be combustion gases of kerosene and liquid oxygen at 3670K. 
+
+### Numerical Method
+The Gauss-Seidel solver is a method used for steady-state calculations and should be used in conjunction with a convergence check to ensure the error decreases over iterations. While I took this route for this solution, one thing I realized is that with combustion and heat transfer over rockets, a steady-state solution is very difficult to reach. With the convergence check in place, the error would never decrease to below the threshold we discussed in class, even after 100,000 iterations. The new goal of this project should be to determine maximum firing time of the copper heatsink, which would have benefited from a FTCS and Crank-Nicholson solver instead that has defined time steps.
