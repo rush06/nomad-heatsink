@@ -207,9 +207,9 @@ int main() {
 bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *g, double *T, int ni, int nj, const char* solid){
 
     int nn = ni*nj;
+    const double w = 1.0; // SOR relaxation factor
 
     // Solve Matrix System
-    const double w = 1.2; // SOR relaxation factor
     for (int it=0; it<10000; it++){ // solver iteration
         for (int n=0; n<nn; n++){ // loop over all nodes
             // skip gas nodes
@@ -226,6 +226,32 @@ bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *
 
             // perform SOR step here to update T[n]
             T[n] = T[n] + w*(T_star - T[n]);
+        }
+
+        // convergence check
+        if (it%50==0){
+            double r2_sum = 0;
+            int skipped = 0;
+            for (int n=0; n<nn; n++){
+                // skip gas nodes
+                if (!solid[n]){skipped++;continue;}
+
+                double sum = 0;
+                if (a[n]!=0) sum += a[n]*T[n-ni]; // T[i,j-1] term
+                if (b[n]!=0) sum += b[n]*T[n-1]; // T[i-1,j] term
+                sum += c[n]*T[n];
+                if (d[n]!=0) sum += d[n]*T[n+1]; // T[i+1,j] term
+                if (e[n]!=0) sum += e[n]*T[n+ni]; // T[i,j+1] term
+
+                double r = g[n] - sum;
+                r2_sum += r*r;
+            }
+
+            // compute avg error ONLY for solid nodes
+            double L2 = sqrt(r2_sum/(nn-skipped));
+
+            std::cout<<"solve iteration: "<<it<<", L2 norm: "<<L2<<std::endl;
+            if (L2<1e-6) return true; // break out of loop when converged
         }
     }
     return false;
