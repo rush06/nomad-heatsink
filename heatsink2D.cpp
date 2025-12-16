@@ -104,9 +104,9 @@ int main() {
             }
 
             // start with internal nodes and then overwrite boundary nodes
-            a[n] = e[n] = -k/(dysqr); // assign multiple variables
-            b[n] = d[n] = -k/(dxsqr);
-            c[n] = 2*k/(dxsqr) + 2*k/(dysqr);
+            a[n] = e[n] = k/(dysqr); // assign multiple variables
+            b[n] = d[n] = k/(dxsqr);
+            c[n] = -2*k/(dxsqr) -2*k/(dysqr);
 
             // Convection BCs
             double xP = x0 + i * dx;
@@ -128,9 +128,9 @@ int main() {
 
                 // modify neighbor nodes
                 a[n] = 0.0;
-                c[n] -= k / (dy * dy);
-                c[n] += coef * beta;
-                g[n] += coef * beta * T_gas;
+                c[n] += k / (dy * dy);
+                c[n] -= coef * beta;
+                g[n] -= coef * beta * T_gas;
             }
             if (j == nj-2){    // upper BC
                 double yout = 2.12;                 // outer wall y
@@ -149,20 +149,20 @@ int main() {
 
                 // modify neighbor nodes
                 e[n] = 0.0;
-                c[n] -= k / (dy * dy);
-                c[n] += coef * beta;
-                g[n] += coef * beta * T_amb;
+                c[n] += k / (dy * dy);
+                c[n] -= coef * beta;
+                g[n] -= coef * beta * T_amb;
             }
 
             // Neumann BCs
             if (i==0){
                 // zero Neumann on x min
                 b[n] = 0;
-                d[n] = -2*k/(dxsqr);
+                d[n] = 2*k/(dxsqr);
             }
             else if (i==ni-1){
                 // zero Neumann on x max
-                b[n] = -2*k/(dxsqr);
+                b[n] = 2*k/(dxsqr);
                 d[n] = 0;
             }
         }
