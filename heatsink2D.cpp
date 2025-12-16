@@ -118,12 +118,12 @@ int main() {
                 c[n] += coef * (1.0 - beta);
                 g[n] += coef * (beta * T_gas);
             }
-            if (j == nj-1){             // upper BC
+            if (j == nj-2){             // upper BC
                 double xP = x0 + i * dx;
                 double yP = y0 + j * dy;
 
-                double yin = NomadContour(xP);     // inner wall y at this x
-                double delta = yP - yin;           // distance from node to wall in -y direction
+                double yout = 2.12 * 0.0254;        // outer wall y
+                double delta = yout - yP;           // distance from node to wall in +y direction
 
                 // avoid grid mismatch
                 if (delta < 1e-12) delta = 1e-12;
@@ -158,7 +158,7 @@ int main() {
     } // end matrix loops
 
     //call solver
-    solveGS_SOR(a,b,c,d,e,g,T,ni,nj);
+    solveGS_SOR(a,b,c,d,e,g,T,ni,nj,solid);
 
     // free memory
     delete[] a;
@@ -192,7 +192,7 @@ int main() {
     return 0;	// normal exit
 }
 
-bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *g, double *T, int ni, int nj){
+bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *g, double *T, int ni, int nj, const char* solid){
 
     int nn = ni*nj;
 
@@ -200,6 +200,9 @@ bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *
     const double w = 1.4; // SOR relaxation factor
     for (int it=0; it<10000; it++){ // solver iteration
         for (int n=0; n<nn; n++){ // loop over all nodes
+            // skip gas nodes
+            if (!solid[n]) continue;
+
             // compute row n * vec(T) product but skip over diagonal term
             // we only include non-zero entries to avoid trying to access out of bound T entries
             double sum = 0;
@@ -216,7 +219,14 @@ bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *
         // Check for Convergence
         if (it%50==0){
             double r2_sum = 0;
+            int skipped = 0;
             for (int n=0; n<nn; n++){
+                // skip solid nodes
+                if (!solid[n]) {
+                    skipped += 1;
+                    continue;
+                }
+
                 double sum = 0;
                 if (a[n]!=0) sum += a[n]*T[n-ni]; // T[i,j-1] term
                 if (b[n]!=0) sum += b[n]*T[n-1]; // T[i-1,j] term
@@ -228,8 +238,9 @@ bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *
                 r2_sum += r*r;
             }
 
-            // compute avg error
-            double L2 = sqrt(r2_sum/nn);
+            // compute avg error accounting for skipped gas nodes
+            int gas = nn - skipped;
+            double L2 = sqrt(r2_sum/gas);
 
             std::cout<<"solve iteration: "<<it<<", L2 norm: "<<L2<<std::endl;
             if (L2<1e-6) return true; // break out of loop when converged
