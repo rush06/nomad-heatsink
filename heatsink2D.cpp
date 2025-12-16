@@ -40,14 +40,17 @@ int main() {
             double h = NomadContour(x);
             
             if (y < h){
-                solid[n] = 0;
+                solid[n] = 0;       // gas nodes
             }
             else {
-                solid[n] = 1;
+                solid[n] = 1;       // solid nodes
             }
+
+            // Boundaries on top and bottom are gas
+            if (j = 0){solid[n] = 0;}
+            if (j = nj-1){solid[n] = 0;}
         }
     }
-
 
     // Memory Allocation
     double *T = new double[nn];   // temperature array
@@ -71,6 +74,7 @@ int main() {
     }
     
     // Set Matrix Values
+    double k = 401.0;       // heat transfer coefficient for copper
     double dxsqr = dx*dx;
     double dysqr = dy*dy;
     for (int j=0; j<nj; j++){
@@ -78,12 +82,67 @@ int main() {
             // initialize unknown indexing variable
             int n = j*ni + i;
 
-            // start with internal nodes and then overwrite boundary nodes
-            a[n] = e[n] = 1/(dysqr); // assign multiple variables
-            b[n] = d[n] = 1/(dxsqr);
-            c[n] = -2/(dxsqr)-2/(dysqr);
+            if (solid[n] == 0){
+                a[n] = b[n] = d[n] = e[n] = 0.0;
+                c[n] = 1.0;
+                continue;
+            }
 
-            // boundaries
+            // start with internal nodes and then overwrite boundary nodes
+            a[n] = e[n] = k/(dysqr); // assign multiple variables
+            b[n] = d[n] = k/(dxsqr);
+            c[n] = -2*k/(dxsqr)-2*k/(dysqr);
+
+            // Convection BCs
+            if (j == 0 || solid[n - ni] == 0){     // lower BC
+
+                double xP = x0 + i * dx;
+                double yP = y0 + j * dy;
+
+                double yin = NomadContour(xP);     // inner wall y at this x
+                double delta = yP - yin;           // distance from node to wall in -y direction
+
+                // avoid grid mismatch
+                if (delta < 1e-12) delta = 1e-12;
+                if (delta > dy)    delta = dy;
+                double f = delta / dy;
+
+                // beta factor
+                double coef = k / (dy * dy);
+                double h_hot = 15000;       // assumption - can be added later with Bartz Equation
+                double T_gas = 3670;        // assumption - can be added later
+                double beta = h_hot / (k/dy + h_hot * f);
+
+                // modify neighbor nodes
+                a[n] = 0.0;
+                c[n] += coef * (1.0 - beta);
+                g[n] += coef * (beta * T_gas);
+            }
+            if (j == nj-1){             // upper BC
+                double xP = x0 + i * dx;
+                double yP = y0 + j * dy;
+
+                double yin = NomadContour(xP);     // inner wall y at this x
+                double delta = yP - yin;           // distance from node to wall in -y direction
+
+                // avoid grid mismatch
+                if (delta < 1e-12) delta = 1e-12;
+                if (delta > dy)    delta = dy;
+                double f = delta / dy;
+
+                // beta factor
+                double coef = k / (dy * dy);
+                double h_amb = 20;       // assumption for ambient air
+                double T_amb = 300;        // assumption for ambient air
+                double beta = h_amb / (k/dy + h_amb * f);
+
+                // modify neighbor nodes
+                e[n] = 0.0;
+                c[n] += coef * (1.0 - beta);
+                g[n] += coef * (beta * T_amb);
+            }
+
+            // Neumann BCs
             if (i==0){
                 // zero Neumann on x min
                 b[n] = 0;
@@ -94,36 +153,9 @@ int main() {
                 b[n] = 2/(dxsqr);
                 d[n] = 0;
             }
-            if (j==0){
-                // Dirichlet on y min
-                a[n] = b[n] = d[n] = e[n] = 0;
-                c[n] = 1;
-                g[n] = 300;
-                continue; // node fully determined now so skip to next
-            }
-            else if (j==nj-1){
-                // zero neumann on y max
-                a[n] = 2/(dysqr);
-                e[n] = 0;
-            }
-
         }
 
     } // end matrix loops
-
-    // set random internal Dirichlet points
-    for (int s = 0; s<20; s++){
-        int i = (int) (1 + rnd()*(ni-2)); // integer in [1,ni-2]
-        int j = (int) (1 + rnd()*(nj-2)); // integer in [1,nj-2]
-        int n = j*ni + i;
-
-        //clear all row data
-        a[n] = b[n] = c[n] = d[n] = e[n] = g[n] = 0;
-
-        // make Dirichlet node
-        c[n] = 1.0; // main diagonal
-        g[n] = rnd()*500 + 300; // random value in [300,800)
-    }
 
     //call solver
     solveGS_SOR(a,b,c,d,e,g,T,ni,nj);
