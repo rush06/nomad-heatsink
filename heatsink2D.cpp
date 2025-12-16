@@ -8,7 +8,7 @@ ASTE-404 HW6 initial file
 #include <vector>
 
 // function prototypes
-bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *g, double *T, int ni, int nj);
+bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *g, double *T, int ni, int nj, const char* solid);
 double NomadContour(double x);
 double spline(double x);
 
@@ -26,6 +26,12 @@ int main() {
 
     int nn = ni*nj;  // total number of nodes
 
+    // Memory Allocation
+    double *T = new double[nn];   // temperature array
+    for (int n=0; n<nn; n++){     // clear data and set initial guess
+        T[n] = 0;
+    }
+
     // Define solid vs. gas nodes
     char *solid = new char[nn];     // initial array for 0 = gas, 1 = solid
     for (int n = 0; n < nn; n++){   // clear data
@@ -41,21 +47,16 @@ int main() {
             
             if (y < h){
                 solid[n] = 0;       // gas nodes
+                T[n] = 3670.0;
             }
             else {
                 solid[n] = 1;       // solid nodes
+                T[n] = 300.0;
             }
 
-            // Boundaries on top and bottom are gas
-            if (j == 0){solid[n] = 0;}
+            // Boundaries on top are ambient gas
             if (j == nj-1){solid[n] = 0;}
         }
-    }
-
-    // Memory Allocation
-    double *T = new double[nn];   // temperature array
-    for (int n=0; n<nn; n++){     // clear data
-        T[n] = 0;
     }
 
     double *a = new double[nn];   // matrix coefficients
@@ -64,6 +65,7 @@ int main() {
     double *d = new double[nn];
     double *e = new double[nn];
     double *g = new double[nn];   // RHS 
+    double *jWall = new double[nn]; // used for finding wall indices
     for (int n=0; n<nn; n++){     // clear data
         a[n] = 0;
         b[n] = 0;
@@ -71,8 +73,19 @@ int main() {
         d[n] = 0;
         e[n] = 0;
         g[n] = 0;
+        jWall[n] = 0;
     }
     
+    // get hot wall indices
+    for (int i = 0; i < ni; ++i) {
+        double xP = x0 + i * dx;
+        double h = NomadContour(xP);        // inner wall y
+        int jw = int((h - y0) / dy + 0.5);  // closest grid index to the wall
+        if (jw < 0)      jw = 0;
+        if (jw > nj - 1) jw = nj - 1;
+        jWall[i] = jw;
+    }
+
     // Set Matrix Values
     double k = 401.0;       // heat transfer coefficient for copper
     double dxsqr = dx*dx;
@@ -89,12 +102,12 @@ int main() {
             }
 
             // start with internal nodes and then overwrite boundary nodes
-            a[n] = e[n] = k/(dysqr); // assign multiple variables
-            b[n] = d[n] = k/(dxsqr);
-            c[n] = -2*k/(dxsqr)-2*k/(dysqr);
+            a[n] = e[n] = -k/(dysqr); // assign multiple variables
+            b[n] = d[n] = -k/(dxsqr);
+            c[n] = 2*k/(dxsqr) + 2*k/(dysqr);
 
             // Convection BCs
-            if (j == 0 || solid[n - ni] == 0){     // lower BC
+            if (j == jWall[i]){     // lower BC
 
                 double xP = x0 + i * dx;
                 double yP = y0 + j * dy;
@@ -115,10 +128,11 @@ int main() {
 
                 // modify neighbor nodes
                 a[n] = 0.0;
+                c[n] -= k / (dy * dy);
                 c[n] += coef * (1.0 - beta);
-                g[n] += coef * (beta * T_gas);
+                g[n] += coef * beta * T_gas;
             }
-            if (j == nj-2){             // upper BC
+            if (j == nj-2){    // upper BC
                 double xP = x0 + i * dx;
                 double yP = y0 + j * dy;
 
@@ -138,19 +152,20 @@ int main() {
 
                 // modify neighbor nodes
                 e[n] = 0.0;
+                c[n] -= k / (dy * dy);
                 c[n] += coef * (1.0 - beta);
-                g[n] += coef * (beta * T_amb);
+                g[n] += coef * beta * T_amb;
             }
 
             // Neumann BCs
             if (i==0){
                 // zero Neumann on x min
                 b[n] = 0;
-                d[n] = 2*k/(dxsqr);
+                d[n] = -2*k/(dxsqr);
             }
             else if (i==ni-1){
                 // zero Neumann on x max
-                b[n] = 2*k/(dxsqr);
+                b[n] = -2*k/(dxsqr);
                 d[n] = 0;
             }
         }
@@ -167,6 +182,15 @@ int main() {
     delete[] d;
     delete[] e;
     delete[] g;
+
+    // set internal gas nodes to 300 to see temperatures in solid wall
+    for (int j=0; j<nj; j++){
+        for (int i=0; i<ni; i++){
+            int n = j * ni + i;
+            
+            if (solid[n] == 0){T[n] = 300;}
+        }
+    }
 
     // output to VTI file
     std::ofstream out("field.vti");
@@ -197,11 +221,11 @@ bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *
     int nn = ni*nj;
 
     // Solve Matrix System
-    const double w = 1.4; // SOR relaxation factor
+    const double w = 1.0; // SOR relaxation factor
     for (int it=0; it<10000; it++){ // solver iteration
         for (int n=0; n<nn; n++){ // loop over all nodes
             // skip gas nodes
-            if (!solid[n]) continue;
+            if (!solid[n]){continue;}
 
             // compute row n * vec(T) product but skip over diagonal term
             // we only include non-zero entries to avoid trying to access out of bound T entries
@@ -222,7 +246,7 @@ bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *
             int skipped = 0;
             for (int n=0; n<nn; n++){
                 // skip solid nodes
-                if (!solid[n]) {
+                if (!solid[n]){
                     skipped += 1;
                     continue;
                 }
@@ -239,8 +263,8 @@ bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *
             }
 
             // compute avg error accounting for skipped gas nodes
-            int gas = nn - skipped;
-            double L2 = sqrt(r2_sum/gas);
+            int solid = nn - skipped;
+            double L2 = sqrt(r2_sum/solid);
 
             std::cout<<"solve iteration: "<<it<<", L2 norm: "<<L2<<std::endl;
             if (L2<1e-6) return true; // break out of loop when converged
@@ -259,27 +283,23 @@ double NomadContour(double x){
     }
     else if (x < 6.56) {
         h = -0.14 + sqrt(0.93 - (x - 5.94)*(x - 5.94));
-        h = floor(h*100)/100;
         h = h * 0.0254;
     }
     else if (x < 7.00){
         h = 0.6 - 0.84 * (x - 6.56);
-        h = floor(h*100)/100;
         h = h * 0.0254;
     }
     else if (x < 7.62){
-        h = 0.9637 + sqrt(0.9637*0.9637 - (x-7.62)*(x-7.62));
-        h = floor(h*100)/100;
+        h = 0.9637 - sqrt(0.9637*0.9637 - (x-7.62)*(x-7.62));
         h = h * 0.0254;
     }
     else if (x < 7.71){
-        h = 0.245 + sqrt(0.245*0.245 - (x-7.62)*(x-7.62));
-        h = floor(h*100)/100;
+        h = 0.245 - sqrt(0.245*0.245 - (x-7.62)*(x-7.62));
         h = h * 0.0254;
     }
     else if (x <= 9.6){
-        h = spline(x);
-        h = floor(h*100)/100;
+        double offset = 0.017129 - spline(7.71);
+        h = spline(x) + offset;
         h = h * 0.0254;
     }
 
