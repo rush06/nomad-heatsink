@@ -32,14 +32,19 @@ int main() {
         solid[n] = 0;
     }
 
-    for (int j=0; j<nj; j++){
+    for (int j=0; j<nj; j++){       // loop to set solid and gas nodes
         for (int i=0; i<ni; i++){
+            int n = j * ni + i;
             double y = y0 + j * dy;
             double x = x0 + i * dx;
-            double h = 0;
-                        
+            double h = NomadContour(x);
             
-
+            if (y < h){
+                solid[n] = 0;
+            }
+            else {
+                solid[n] = 1;
+            }
         }
     }
 
@@ -234,6 +239,8 @@ double NomadContour(double x){
         h = floor(h*100)/100;
         h = h * 0.0254;
     }
+
+    return h;
 }
 
 double spline(double x){
