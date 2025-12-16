@@ -21,8 +21,8 @@ int main() {
     double x0 = 0.0;  // origin
     double y0 = 0.0;
 
-    double dx = 0.01 * 0.0254;  // cell spacing converted from in to m
-    double dy = 0.01 * 0.0254;
+    double dx = 0.01;  // cell spacing converted from in to m
+    double dy = 0.01;
 
     int nn = ni*nj;  // total number of nodes
 
@@ -80,9 +80,11 @@ int main() {
     for (int i = 0; i < ni; ++i) {
         double xP = x0 + i * dx;
         double h = NomadContour(xP);        // inner wall y
+        
         int jw = int((h - y0) / dy + 0.5);  // closest grid index to the wall
         if (jw < 0)      jw = 0;
         if (jw > nj - 1) jw = nj - 1;
+
         jWall[i] = jw;
     }
 
@@ -107,11 +109,9 @@ int main() {
             c[n] = 2*k/(dxsqr) + 2*k/(dysqr);
 
             // Convection BCs
-            if (j == jWall[i]){     // lower BC
-
-                double xP = x0 + i * dx;
-                double yP = y0 + j * dy;
-
+            double xP = x0 + i * dx;
+            double yP = y0 + j * dy;
+            if (j == jWall[i] || (xP < 5.94 && yP == 0.82)){     // lower BC
                 double yin = NomadContour(xP);     // inner wall y at this x
                 double delta = yP - yin;           // distance from node to wall in -y direction
 
@@ -122,21 +122,18 @@ int main() {
 
                 // beta factor
                 double coef = k / (dy * dy);
-                double h_hot = 15000;       // assumption - can be added later with Bartz Equation
-                double T_gas = 3670;        // assumption - can be added later
+                double h_hot = 15000;           // assumption - can be added later with Bartz Equation
+                double T_gas = 3670;            // assumption - can be added later
                 double beta = h_hot / (k/dy + h_hot * f);
 
                 // modify neighbor nodes
                 a[n] = 0.0;
                 c[n] -= k / (dy * dy);
-                c[n] += coef * (1.0 - beta);
+                c[n] += coef * beta;
                 g[n] += coef * beta * T_gas;
             }
             if (j == nj-2){    // upper BC
-                double xP = x0 + i * dx;
-                double yP = y0 + j * dy;
-
-                double yout = 2.12 * 0.0254;        // outer wall y
+                double yout = 2.12;                 // outer wall y
                 double delta = yout - yP;           // distance from node to wall in +y direction
 
                 // avoid grid mismatch
@@ -153,7 +150,7 @@ int main() {
                 // modify neighbor nodes
                 e[n] = 0.0;
                 c[n] -= k / (dy * dy);
-                c[n] += coef * (1.0 - beta);
+                c[n] += coef * beta;
                 g[n] += coef * beta * T_amb;
             }
 
@@ -182,15 +179,6 @@ int main() {
     delete[] d;
     delete[] e;
     delete[] g;
-
-    // set internal gas nodes to 300 to see temperatures in solid wall
-    for (int j=0; j<nj; j++){
-        for (int i=0; i<ni; i++){
-            int n = j * ni + i;
-            
-            if (solid[n] == 0){T[n] = 300;}
-        }
-    }
 
     // output to VTI file
     std::ofstream out("field.vti");
@@ -221,7 +209,7 @@ bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *
     int nn = ni*nj;
 
     // Solve Matrix System
-    const double w = 1.0; // SOR relaxation factor
+    const double w = 1.2; // SOR relaxation factor
     for (int it=0; it<10000; it++){ // solver iteration
         for (int n=0; n<nn; n++){ // loop over all nodes
             // skip gas nodes
@@ -239,68 +227,31 @@ bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *
             // perform SOR step here to update T[n]
             T[n] = T[n] + w*(T_star - T[n]);
         }
-
-        // Check for Convergence
-        if (it%50==0){
-            double r2_sum = 0;
-            int skipped = 0;
-            for (int n=0; n<nn; n++){
-                // skip solid nodes
-                if (!solid[n]){
-                    skipped += 1;
-                    continue;
-                }
-
-                double sum = 0;
-                if (a[n]!=0) sum += a[n]*T[n-ni]; // T[i,j-1] term
-                if (b[n]!=0) sum += b[n]*T[n-1]; // T[i-1,j] term
-                sum += c[n]*T[n];
-                if (d[n]!=0) sum += d[n]*T[n+1]; // T[i+1,j] term
-                if (e[n]!=0) sum += e[n]*T[n+ni]; // T[i,j+1] term
-
-                double r = g[n] - sum;
-                r2_sum += r*r;
-            }
-
-            // compute avg error accounting for skipped gas nodes
-            int solid = nn - skipped;
-            double L2 = sqrt(r2_sum/solid);
-
-            std::cout<<"solve iteration: "<<it<<", L2 norm: "<<L2<<std::endl;
-            if (L2<1e-6) return true; // break out of loop when converged
-        }
     }
     return false;
 }
 
 double NomadContour(double x){
-    x = x / 0.0254; // convert to inches
     double h = 0.0;
 
     if (x < 5.94) {
         h = 0.82;
-        h = h * 0.0254;
     }
     else if (x < 6.56) {
         h = -0.14 + sqrt(0.93 - (x - 5.94)*(x - 5.94));
-        h = h * 0.0254;
     }
     else if (x < 7.00){
         h = 0.6 - 0.84 * (x - 6.56);
-        h = h * 0.0254;
     }
     else if (x < 7.62){
         h = 0.9637 - sqrt(0.9637*0.9637 - (x-7.62)*(x-7.62));
-        h = h * 0.0254;
     }
     else if (x < 7.71){
         h = 0.245 - sqrt(0.245*0.245 - (x-7.62)*(x-7.62));
-        h = h * 0.0254;
     }
     else if (x <= 9.6){
         double offset = 0.017129 - spline(7.71);
         h = spline(x) + offset;
-        h = h * 0.0254;
     }
 
     return h;
