@@ -4,48 +4,57 @@ ASTE-404 HW6 initial file
 
 #include <iostream>         // for screen output
 #include <fstream>          // for file writing
-#include <random>           // for random number generation
+#include <cmath>
 
-std::random_device rnd_device;          // a true system-based slow RNG used to seed
-std::mt19937 mt_gen(rnd_device());      // Mersenne Twister random number generator
-std::uniform_real_distribution<double> rnd_dist;    // uniform dist in [0,1)
-double rnd() {                          // returns random number in [0,1)
-    return rnd_dist(mt_gen);
-}
-
-// function prototype
+// function prototypes
 bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *g, double *T, int ni, int nj);
+double NomadContour(double x);
 
 int main() {
 
-    int ni = 61;   // number of nodes
-    int nj = 21;
+    // Mesh Sizing for Chamber Profile
+    int ni = 960;   // number of nodes
+    int nj = 213;
 
-    double x0 = 0.1;  // origin
-    double y0 = 0.1;
+    double x0 = 0.0;  // origin
+    double y0 = 0.0;
 
-    double dx = 0.01;  // cell spacing
-    double dy = 0.02;
+    double dx = 0.01 * 0.0254;  // cell spacing converted from in to m
+    double dy = 0.01 * 0.0254;
 
     int nn = ni*nj;  // total number of nodes
 
-    /* part (b): allocate memory here */
-    double *T = new double[nn];
+    // Define solid vs. gas nodes
+    char *solid = new char[nn];     // initial array for 0 = gas, 1 = solid
+    for (int n = 0; n < nn; n++){   // clear data
+        solid[n] = 0;
+    }
 
-    // clear data (not initialized by default)
-    for (int n=0; n<nn; n++){
+    for (int j=0; j<nj; j++){
+        for (int i=0; i<ni; i++){
+            double y = y0 + j * dy;
+            double x = x0 + i * dx;
+            double h = 0;
+                        
+            
+
+        }
+    }
+
+
+    // Memory Allocation
+    double *T = new double[nn];   // temperature array
+    for (int n=0; n<nn; n++){     // clear data
         T[n] = 0;
     }
-    // allocate memory for the matrix coefficients and rhs
-    double *a = new double[nn];
+
+    double *a = new double[nn];   // matrix coefficients
     double *b = new double[nn];
     double *c = new double[nn];
     double *d = new double[nn];
     double *e = new double[nn];
-    double *g = new double[nn];
-
-    // clear data
-    for (int n=0; n<nn; n++){
+    double *g = new double[nn];   // RHS 
+    for (int n=0; n<nn; n++){     // clear data
         a[n] = 0;
         b[n] = 0;
         c[n] = 0;
@@ -54,7 +63,7 @@ int main() {
         g[n] = 0;
     }
     
-    /* part (c): set matrix values here */
+    // Set Matrix Values
     double dxsqr = dx*dx;
     double dysqr = dy*dy;
     for (int j=0; j<nj; j++){
@@ -112,7 +121,7 @@ int main() {
     //call solver
     solveGS_SOR(a,b,c,d,e,g,T,ni,nj);
 
-    /* part (b) again: free memory */
+    // free memory
     delete[] a;
     delete[] b;
     delete[] c;
@@ -120,7 +129,7 @@ int main() {
     delete[] e;
     delete[] g;
 
-    /* part (e): output vti file here */
+    // output to VTI file
     std::ofstream out("field.vti");
 
     out<<"<VTKFile type=\"ImageData\">\n";
@@ -148,7 +157,7 @@ bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *
 
     int nn = ni*nj;
 
-    /* part (d): solve matrix system here */
+    // Solve Matrix System
     const double w = 1.4; // SOR relaxation factor
     for (int it=0; it<10000; it++){ // solver iteration
         for (int n=0; n<nn; n++){ // loop over all nodes
@@ -165,7 +174,7 @@ bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *
             T[n] = T[n] + w*(T_star - T[n]);
         }
 
-        /*  part (f): convergence check, only every 50 iterations */
+        // Check for Convergence
         if (it%50==0){
             double r2_sum = 0;
             for (int n=0; n<nn; n++){
@@ -188,4 +197,20 @@ bool solveGS_SOR(double *a, double *b, double *c, double *d, double *e, double *
         }
     }
     return false;
+}
+
+double NomadContour(double x){
+    x = x / 0.0254; // convert to inches
+     
+    double h = 0.0;
+    double num = 0.0;
+
+    if (x < 5.94) {
+        h = 0.82 * 0.0254;
+    }
+    else if (x < 6.56) {
+        num = 0.93 - (x - 5.94)^2
+        h = -0.14 + sqrt(0.93 - (x - 5.94)^2);
+
+    }
 }
